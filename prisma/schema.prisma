@@ -1,0 +1,1010 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+
+enum TenantStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  TRIAL
+}
+
+enum PlanTier {
+  STARTER
+  GROWTH
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  MANAGER
+  STAFF
+  COLLECTOR
+  FRANCHISE
+  SUBSCRIBER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum SubscriberStatus {
+  ACTIVE
+  EXPIRED
+  DISABLED
+  SUSPENDED
+  TRIAL
+}
+
+enum ConnectionType {
+  PPPOE
+  HOTSPOT
+  STATIC_IP
+  MAC_BIND
+}
+
+enum SubscriberType {
+  RESIDENTIAL
+  COMMERCIAL
+}
+
+enum PlanStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum BillingType {
+  PREPAID
+  POSTPAID
+}
+
+enum PlanType {
+  PPPOE
+  HOTSPOT
+  BOTH
+}
+
+enum SpeedUnit {
+  KBPS
+  MBPS
+}
+
+enum DataUnit {
+  MB
+  GB
+  TB
+  UNLIMITED
+}
+
+enum ValidityUnit {
+  HOURS
+  DAYS
+  WEEKS
+  MONTHS
+}
+
+enum NasStatus {
+  ACTIVE
+  INACTIVE
+  UNREACHABLE
+}
+
+enum NasType {
+  MIKROTIK
+  CISCO
+  UBIQUITI
+  OTHER
+}
+
+enum LocationType {
+  REGION
+  CITY
+  AREA
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  OVERDUE
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  CARD
+  BANK_TRANSFER
+  PAYMENT_GATEWAY
+  VOUCHER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentGatewayProvider {
+  RAZORPAY
+  CASHFREE
+  PHONEPE
+  PAYTM
+  STRIPE
+}
+
+enum PaymentGatewayStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum NotificationType {
+  EXPIRY_REMINDER
+  EXPIRED_NOTICE
+  PAYMENT_CONFIRMATION
+  PAYMENT_DUE
+  PLAN_ACTIVATION
+  OTP
+  TICKET_UPDATE
+  FUP_REACHED
+}
+
+enum NotificationChannel {
+  SMS
+  EMAIL
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  QUEUED
+}
+
+enum SmsProvider {
+  MSG91
+  TEXTLOCAL
+  TWILIO
+  WHATSAPP
+  CUSTOM
+}
+
+enum GatewayStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// Phase 5 enums
+
+enum VoucherStatus {
+  GENERATED
+  SOLD
+  REDEEMED
+  EXPIRED
+}
+
+enum TicketStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketCategory {
+  CONNECTIVITY
+  BILLING
+  SPEED
+  INSTALLATION
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  SITE_SURVEY
+  INSTALLATION_SCHEDULED
+  CONVERTED
+  LOST
+}
+
+enum LeadSource {
+  WALK_IN
+  REFERRAL
+  WEBSITE
+  PHONE
+  SOCIAL_MEDIA
+  OTHER
+}
+
+// Platform-level models
+
+model Tenant {
+  id          String       @id @default(uuid())
+  name        String
+  slug        String       @unique
+  domain      String?
+  logo        String?
+  settings    Json         @default("{}")
+  planTier    PlanTier     @default(STARTER) @map("plan_tier")
+  status      TenantStatus @default(TRIAL)
+  maxOnline   Int          @default(50) @map("max_online")
+  trialEndsAt DateTime?    @map("trial_ends_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  users                 User[]
+  plans                 Plan[]
+  subscribers           Subscriber[]
+  nasDevices            NasDevice[]
+  locations             Location[]
+  invoices              Invoice[]
+  payments              Payment[]
+  paymentGateways       PaymentGateway[]
+  notificationTemplates NotificationTemplate[]
+  notificationLogs      NotificationLog[]
+  smsGateways           SmsGateway[]
+  emailConfig           EmailConfig?
+  otps                  Otp[]
+  voucherBatches        VoucherBatch[]
+  vouchers              Voucher[]
+  tickets               Ticket[]
+  ticketComments        TicketComment[]
+  leads                 Lead[]
+  captivePortalConfig   CaptivePortalConfig?
+
+  @@map("tenants")
+}
+
+model User {
+  id            String     @id @default(uuid())
+  tenantId      String?    @map("tenant_id")
+  name          String
+  email         String     @unique
+  phone         String?
+  passwordHash  String     @map("password_hash")
+  role          UserRole   @default(STAFF)
+  status        UserStatus @default(ACTIVE)
+  locationId    String?    @map("location_id")
+  emailVerified DateTime?  @map("email_verified")
+  image         String?
+  lastLoginAt   DateTime?  @map("last_login_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  tenant          Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location        Location?       @relation("UserLocation", fields: [locationId], references: [id])
+  sessions        Session[]
+  accounts        Account[]
+  assignedTickets Ticket[]        @relation("TicketAssignee")
+  ticketComments  TicketComment[]
+
+  @@index([tenantId, email])
+  @@index([tenantId, role])
+  @@index([tenantId, locationId])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refreshToken      String? @map("refresh_token") @db.Text
+  accessToken       String? @map("access_token") @db.Text
+  expiresAt         Int?    @map("expires_at")
+  tokenType         String? @map("token_type")
+  scope             String?
+  idToken           String? @map("id_token") @db.Text
+  sessionState      String? @map("session_state")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// Plans
+
+model Plan {
+  id              String      @id @default(uuid())
+  tenantId        String      @map("tenant_id")
+  name            String
+  description     String?
+  downloadSpeed   Int         @map("download_speed")
+  uploadSpeed     Int         @map("upload_speed")
+  speedUnit       SpeedUnit   @default(MBPS) @map("speed_unit")
+  dataLimit       Int?        @map("data_limit")
+  dataUnit        DataUnit    @default(UNLIMITED) @map("data_unit")
+  validityDays    Int         @map("validity_days")
+  validityUnit    ValidityUnit @default(DAYS) @map("validity_unit")
+  price           Decimal     @db.Decimal(10, 2)
+  billingType     BillingType @default(PREPAID) @map("billing_type")
+  planType        PlanType    @default(PPPOE) @map("plan_type")
+
+  // FUP (Fair Usage Policy)
+  fupDownloadSpeed Int?       @map("fup_download_speed")
+  fupUploadSpeed   Int?       @map("fup_upload_speed")
+  fupSpeedUnit     SpeedUnit? @map("fup_speed_unit")
+
+  // Burst settings
+  burstDownloadSpeed Int?     @map("burst_download_speed")
+  burstUploadSpeed   Int?     @map("burst_upload_speed")
+  burstThreshold     Int?     @map("burst_threshold")
+  burstTime          Int?     @map("burst_time")
+
+  // Time restriction
+  timeSlotStart String?       @map("time_slot_start")
+  timeSlotEnd   String?       @map("time_slot_end")
+
+  // Limits
+  simultaneousDevices Int     @default(1) @map("simultaneous_devices")
+  priority            Int     @default(8)
+
+  // Pool
+  poolName String?            @map("pool_name")
+
+  status    PlanStatus @default(ACTIVE)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscribers    Subscriber[]
+  invoices       Invoice[]
+  voucherBatches VoucherBatch[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, name])
+  @@map("plans")
+}
+
+// NAS devices
+
+model NasDevice {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  name        String
+  shortName   String?   @map("short_name")
+  nasIp       String    @map("nas_ip")
+  secret      String
+  nasType     NasType   @default(MIKROTIK) @map("nas_type")
+  description String?
+  locationId  String?   @map("location_id")
+  ports       Int?
+  community   String?
+  status      NasStatus @default(ACTIVE)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location    Location?   @relation(fields: [locationId], references: [id])
+  subscribers Subscriber[]
+
+  @@unique([tenantId, nasIp])
+  @@index([tenantId, status])
+  @@map("nas_devices")
+}
+
+// Locations
+
+model Location {
+  id        String       @id @default(uuid())
+  tenantId  String       @map("tenant_id")
+  name      String
+  type      LocationType @default(AREA)
+  parentId  String?      @map("parent_id")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent     Location?   @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children   Location[]  @relation("LocationHierarchy")
+  nasDevices  NasDevice[]
+  subscribers Subscriber[]
+  leads       Lead[]
+  assignedUsers User[]     @relation("UserLocation")
+
+  @@index([tenantId, type])
+  @@index([tenantId, parentId])
+  @@map("locations")
+}
+
+// Subscribers
+
+model Subscriber {
+  id                String           @id @default(uuid())
+  tenantId          String           @map("tenant_id")
+  name              String
+  phone             String
+  email             String?
+  alternatePhone    String?          @map("alternate_phone")
+  address           String?
+  gpsCoordinates    String?          @map("gps_coordinates")
+  subscriberType    SubscriberType   @default(RESIDENTIAL) @map("subscriber_type")
+  connectionType    ConnectionType   @default(PPPOE) @map("connection_type")
+
+  // Auth credentials (for RADIUS)
+  username          String
+  passwordHash      String           @map("password_hash")
+
+  // Network assignments
+  planId            String?          @map("plan_id")
+  nasDeviceId       String?          @map("nas_device_id")
+  locationId        String?          @map("location_id")
+  macAddress        String?          @map("mac_address")
+  ipAddress         String?          @map("ip_address")
+  staticIp          String?          @map("static_ip")
+
+  // Dates
+  installationDate  DateTime?        @map("installation_date")
+  lastRenewalDate   DateTime?        @map("last_renewal_date")
+  expiryDate        DateTime?        @map("expiry_date")
+
+  // Status
+  status            SubscriberStatus @default(ACTIVE)
+  notes             String?
+  balance           Decimal          @default(0) @db.Decimal(10, 2)
+  autoRenewal       Boolean          @default(false) @map("auto_renewal")
+
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  deletedAt         DateTime?        @map("deleted_at")
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan             Plan?             @relation(fields: [planId], references: [id])
+  nasDevice        NasDevice?        @relation(fields: [nasDeviceId], references: [id])
+  location         Location?         @relation(fields: [locationId], references: [id])
+  invoices         Invoice[]
+  payments         Payment[]
+  notificationLogs NotificationLog[]
+  tickets          Ticket[]
+  vouchers         Voucher[]       @relation("VoucherRedeemedBy")
+
+  @@unique([tenantId, username])
+  @@index([tenantId, status])
+  @@index([tenantId, phone])
+  @@index([tenantId, email])
+  @@index([tenantId, planId])
+  @@index([tenantId, nasDeviceId])
+  @@index([tenantId, locationId])
+  @@index([tenantId, expiryDate])
+  @@map("subscribers")
+}
+
+// RADIUS tables (used by FreeRADIUS rlm_sql)
+
+model RadCheck {
+  id        String   @id @default(uuid())
+  username  String   // Format: {tenantSlug}_{subscriberUsername}
+  attribute String   // "Cleartext-Password"
+  op        String   @default(":=")
+  value     String   // Password value
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([username, attribute])
+  @@index([username])
+  @@map("radcheck")
+}
+
+model RadReply {
+  id        String   @id @default(uuid())
+  username  String
+  attribute String
+  op        String   @default(":=")
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([username, attribute])
+  @@index([username])
+  @@map("radreply")
+}
+
+model RadGroupCheck {
+  id        String   @id @default(uuid())
+  groupname String
+  attribute String
+  op        String   @default(":=")
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([groupname])
+  @@map("radgroupcheck")
+}
+
+model RadGroupReply {
+  id        String   @id @default(uuid())
+  groupname String   // Format: {tenantSlug}_{planId}
+  attribute String   // "Mikrotik-Rate-Limit", "Framed-Pool", etc.
+  op        String   @default(":=")
+  value     String
+  priority  Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([groupname])
+  @@map("radgroupreply")
+}
+
+model RadUserGroup {
+  id        String   @id @default(uuid())
+  username  String   // Format: {tenantSlug}_{subscriberUsername}
+  groupname String   // Format: {tenantSlug}_{planId}
+  priority  Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([username, groupname])
+  @@index([username])
+  @@index([groupname])
+  @@map("radusergroup")
+}
+
+model RadAcct {
+  id                  BigInt    @id @default(autoincrement()) @map("radacctid")
+  acctsessionid       String    @map("acctsessionid")
+  acctuniqueid        String    @unique @map("acctuniqueid")
+  username            String
+  realm               String?
+  nasipaddress        String    @map("nasipaddress") @db.Inet
+  nasportid           String?   @map("nasportid")
+  nasporttype         String?   @map("nasporttype")
+  acctstarttime       DateTime? @map("acctstarttime") @db.Timestamptz()
+  acctupdatetime      DateTime? @map("acctupdatetime") @db.Timestamptz()
+  acctstoptime        DateTime? @map("acctstoptime") @db.Timestamptz()
+  acctinterval        BigInt?   @map("acctinterval")
+  acctsessiontime     BigInt?   @map("acctsessiontime")
+  acctauthentic       String?   @map("acctauthentic")
+  connectinfoStart    String?   @map("connectinfo_start")
+  connectinfoStop     String?   @map("connectinfo_stop")
+  acctinputoctets     BigInt?   @map("acctinputoctets")
+  acctoutputoctets    BigInt?   @map("acctoutputoctets")
+  calledstationid     String?   @map("calledstationid")
+  callingstationid    String?   @map("callingstationid") // MAC address
+  acctterminatecause  String?   @map("acctterminatecause")
+  servicetype         String?   @map("servicetype")
+  framedprotocol      String?   @map("framedprotocol")
+  framedipaddress     String?   @map("framedipaddress") @db.Inet
+  framedipv6address   String?   @map("framedipv6address") @db.Inet
+  framedipv6prefix    String?   @map("framedipv6prefix") @db.Inet
+  framedinterfaceid   String?   @map("framedinterfaceid")
+  delegatedipv6prefix String?   @map("delegatedipv6prefix") @db.Inet
+  class               String?
+
+  @@index([username])
+  @@index([nasipaddress])
+  @@index([acctstarttime])
+  @@index([acctstoptime])
+  @@index([acctsessionid])
+  @@map("radacct")
+}
+
+model RadNas {
+  id          String   @id @default(uuid())
+  nasname     String   @unique // NAS IP address
+  shortname   String
+  type        String   @default("other")
+  ports       Int?     // NAS ports
+  secret      String   // RADIUS shared secret
+  server      String?  // Virtual server (FreeRADIUS)
+  community   String?  // SNMP community
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([nasname])
+  @@map("nas")
+}
+
+model RadPostAuth {
+  id       BigInt   @id @default(autoincrement())
+  username String   @db.VarChar(64)
+  pass     String?  @db.VarChar(64)
+  reply    String?  @db.VarChar(32)
+  authdate DateTime @default(now()) @db.Timestamptz()
+
+  @@index([username])
+  @@index([authdate])
+  @@map("radpostauth")
+}
+
+// Billing & payments
+
+model Invoice {
+  id             String        @id @default(uuid())
+  tenantId       String        @map("tenant_id")
+  subscriberId   String        @map("subscriber_id")
+  planId         String?       @map("plan_id") // Snapshot for reference
+  invoiceNumber  String        @map("invoice_number") // "INV-001", "INV-002", etc.
+
+  // Amounts
+  amount         Decimal       @db.Decimal(10, 2)
+  tax            Decimal       @default(0) @db.Decimal(10, 2)
+  discount       Decimal       @default(0) @db.Decimal(10, 2)
+  total          Decimal       @db.Decimal(10, 2) // amount + tax - discount
+  amountPaid     Decimal       @default(0) @db.Decimal(10, 2)
+  balanceDue     Decimal       @db.Decimal(10, 2) // total - amountPaid
+
+  // Dates
+  invoiceDate    DateTime      @default(now()) @map("invoice_date")
+  dueDate        DateTime      @map("due_date")
+  paidDate       DateTime?     @map("paid_date")
+
+  // Status and metadata
+  status         InvoiceStatus @default(ISSUED)
+  description    String?       @db.Text
+  notes          String?       @db.Text
+  planDetails    Json?         @map("plan_details") // Store plan snapshot
+  pdfUrl         String?       @map("pdf_url")
+
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriber     Subscriber    @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  plan           Plan?         @relation(fields: [planId], references: [id], onDelete: SetNull)
+  payments       Payment[]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId, subscriberId])
+  @@index([tenantId, status])
+  @@index([tenantId, invoiceDate])
+  @@index([tenantId, dueDate])
+  @@map("invoices")
+}
+
+model Payment {
+  id                String         @id @default(uuid())
+  tenantId          String         @map("tenant_id")
+  subscriberId      String         @map("subscriber_id")
+  invoiceId         String?        @map("invoice_id") // Nullable for standalone payments
+
+  // Payment details
+  amount            Decimal        @db.Decimal(10, 2)
+  method            PaymentMethod
+  transactionId     String?        @map("transaction_id") // Gateway transaction ID
+  gatewayOrderId    String?        @map("gateway_order_id") // Gateway order ID
+  gatewayProvider   String?        @map("gateway_provider") // "razorpay", "cashfree"
+
+  // Status
+  status            PaymentStatus  @default(COMPLETED)
+
+  // Metadata
+  collectedBy       String?        @map("collected_by") // User ID who recorded payment
+  notes             String?        @db.Text
+  receiptUrl        String?        @map("receipt_url")
+  gatewayResponse   Json?          @map("gateway_response") // Store webhook data
+
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriber        Subscriber     @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+  invoice           Invoice?       @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, subscriberId])
+  @@index([tenantId, invoiceId])
+  @@index([tenantId, status])
+  @@index([transactionId])
+  @@index([gatewayOrderId])
+  @@map("payments")
+}
+
+model PaymentGateway {
+  id          String                   @id @default(uuid())
+  tenantId    String                   @map("tenant_id")
+  provider    PaymentGatewayProvider
+  name        String                   // Display name e.g., "Razorpay Production"
+
+  // Credentials (encrypted in application code)
+  apiKey      String                   @map("api_key")
+  apiSecret   String                   @map("api_secret")
+  webhookSecret String?                @map("webhook_secret")
+
+  // Configuration
+  isTestMode  Boolean                  @default(true) @map("is_test_mode")
+  status      PaymentGatewayStatus     @default(ACTIVE)
+  config      Json?                    // Additional provider-specific config
+
+  createdAt   DateTime                 @default(now()) @map("created_at")
+  updatedAt   DateTime                 @updatedAt @map("updated_at")
+
+  // Relations
+  tenant      Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@index([tenantId, status])
+  @@map("payment_gateways")
+}
+
+// Notifications
+
+model NotificationTemplate {
+  id          String              @id @default(uuid())
+  tenantId    String              @map("tenant_id")
+  eventType   NotificationType    @map("event_type")
+  channel     NotificationChannel
+  name        String              // Display name like "Expiry Reminder - 3 Days"
+  subject     String?             // For email only
+  template    String              @db.Text // Template with {variable} placeholders
+  variables   String[]            // Array of variable names like ["name", "plan", "expiry"]
+  isActive    Boolean             @default(true) @map("is_active")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, eventType, channel])
+  @@index([tenantId, isActive])
+  @@map("notification_templates")
+}
+
+model NotificationLog {
+  id            String              @id @default(uuid())
+  tenantId      String              @map("tenant_id")
+  subscriberId  String?             @map("subscriber_id")
+  type          NotificationType
+  channel       NotificationChannel
+  recipient     String              // Phone number or email address
+  subject       String?             // For email
+  message       String              @db.Text
+  status        NotificationStatus  @default(PENDING)
+  error         String?             @db.Text
+  gatewayResponse Json?             @map("gateway_response")
+  sentAt        DateTime?           @map("sent_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriber    Subscriber?         @relation(fields: [subscriberId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, subscriberId])
+  @@index([tenantId, status])
+  @@index([tenantId, type])
+  @@index([tenantId, createdAt])
+  @@map("notification_logs")
+}
+
+model SmsGateway {
+  id          String            @id @default(uuid())
+  tenantId    String            @map("tenant_id")
+  provider    SmsProvider
+  name        String
+  apiKey      String            @map("api_key")
+  senderId    String            @map("sender_id")  // 6-char sender ID (e.g., "DEMOSP")
+  apiUrl      String?           @map("api_url")     // For custom provider
+  status      GatewayStatus     @default(ACTIVE)
+  config      Json?             // Provider-specific config
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@index([tenantId, status])
+  @@map("sms_gateways")
+}
+
+model EmailConfig {
+  id          String   @id @default(uuid())
+  tenantId    String   @unique @map("tenant_id")
+  smtpHost    String   @map("smtp_host")
+  smtpPort    Int      @map("smtp_port")
+  smtpUser    String   @map("smtp_user")
+  smtpPassword String  @map("smtp_password")
+  fromEmail   String   @map("from_email")
+  fromName    String   @map("from_name")
+  useTls      Boolean  @default(true) @map("use_tls")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("email_configs")
+}
+
+model Otp {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  phone       String
+  code        String   // 6-digit OTP
+  purpose     String   // "login", "registration", "verification"
+  attempts    Int      @default(0)
+  verified    Boolean  @default(false)
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, phone, purpose])
+  @@index([code, expiresAt])
+  @@map("otps")
+}
+
+// Vouchers
+
+model VoucherBatch {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  planId        String   @map("plan_id")
+  batchNumber   String   @map("batch_number") // "BATCH-001"
+  prefix        String   @default("") // Voucher code prefix
+  quantity      Int
+  codeLength    Int      @default(8) @map("code_length")
+  validityDays  Int      @map("validity_days") // Each voucher valid for N days from redemption
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan     Plan      @relation(fields: [planId], references: [id])
+  vouchers Voucher[]
+
+  @@unique([tenantId, batchNumber])
+  @@index([tenantId])
+  @@map("voucher_batches")
+}
+
+model Voucher {
+  id             String        @id @default(uuid())
+  tenantId       String        @map("tenant_id")
+  batchId        String        @map("batch_id")
+  code           String        // Unique voucher code (e.g., "DEMO-A1B2C3D4")
+  serialNumber   Int           @map("serial_number") // Sequential within batch
+  status         VoucherStatus @default(GENERATED)
+  soldTo         String?       @map("sold_to") // Dealer/retailer name
+  soldAt         DateTime?     @map("sold_at")
+  redeemedById   String?       @map("redeemed_by_id") // Subscriber who redeemed
+  redeemedAt     DateTime?     @map("redeemed_at")
+  expiresAt      DateTime?     @map("expires_at") // Set on redemption: redeemedAt + validityDays
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  batch      VoucherBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  redeemedBy Subscriber? @relation("VoucherRedeemedBy", fields: [redeemedById], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status])
+  @@index([tenantId, batchId])
+  @@index([code])
+  @@map("vouchers")
+}
+
+// Tickets & helpdesk
+
+model Ticket {
+  id            String         @id @default(uuid())
+  tenantId      String         @map("tenant_id")
+  subscriberId  String?        @map("subscriber_id")
+  assignedToId  String?        @map("assigned_to_id")
+  ticketNumber  String         @map("ticket_number") // "TKT-001"
+  subject       String
+  description   String         @db.Text
+  category      TicketCategory @default(OTHER)
+  priority      TicketPriority @default(MEDIUM)
+  status        TicketStatus   @default(OPEN)
+  resolvedAt    DateTime?      @map("resolved_at")
+  closedAt      DateTime?      @map("closed_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriber Subscriber?     @relation(fields: [subscriberId], references: [id], onDelete: SetNull)
+  assignedTo User?           @relation("TicketAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  comments   TicketComment[]
+
+  @@unique([tenantId, ticketNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, priority])
+  @@index([tenantId, subscriberId])
+  @@index([tenantId, assignedToId])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  ticketId    String   @map("ticket_id")
+  userId      String   @map("user_id") // Staff who wrote the comment
+  message     String   @db.Text
+  isInternal  Boolean  @default(false) @map("is_internal") // Internal notes not visible to subscriber
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([tenantId, ticketId])
+  @@map("ticket_comments")
+}
+
+// Leads
+
+model Lead {
+  id            String     @id @default(uuid())
+  tenantId      String     @map("tenant_id")
+  name          String
+  phone         String
+  email         String?
+  address       String?
+  locationId    String?    @map("location_id")
+  source        LeadSource @default(WALK_IN)
+  status        LeadStatus @default(NEW)
+  notes         String?    @db.Text
+  convertedToId String?    @map("converted_to_id") // Subscriber ID after conversion
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location  Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status])
+  @@index([tenantId, phone])
+  @@map("leads")
+}
+
+// Captive portal
+
+model CaptivePortalConfig {
+  id                String   @id @default(uuid())
+  tenantId          String   @unique @map("tenant_id")
+  isEnabled         Boolean  @default(false) @map("is_enabled")
+  logoUrl           String?  @map("logo_url")
+  backgroundUrl     String?  @map("background_url")
+  primaryColor      String   @default("#2563eb") @map("primary_color")
+  welcomeTitle      String   @default("Welcome to WiFi") @map("welcome_title")
+  welcomeMessage    String?  @map("welcome_message") @db.Text
+  termsOfService    String?  @map("terms_of_service") @db.Text
+  redirectUrl       String?  @map("redirect_url")
+  enableOtpLogin    Boolean  @default(true) @map("enable_otp_login")
+  enableVoucherLogin Boolean @default(true) @map("enable_voucher_login")
+  enableUserPassLogin Boolean @default(true) @map("enable_user_pass_login")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("captive_portal_configs")
+}
