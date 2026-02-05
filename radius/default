@@ -1,0 +1,66 @@
+# CloudRadius - Default Virtual Server Configuration
+
+server default {
+    listen {
+        type = auth
+        ipaddr = *
+        port = 0
+        limit {
+            max_connections = 16
+            lifetime = 0
+            idle_timeout = 30
+        }
+    }
+
+    listen {
+        ipaddr = *
+        port = 0
+        type = acct
+        limit {
+        }
+    }
+
+    authorize {
+        filter_username
+        preprocess
+        chap
+        mschap
+        sql
+        expiration
+        pap
+    }
+
+    authenticate {
+        Auth-Type PAP {
+            pap
+        }
+        Auth-Type CHAP {
+            chap
+        }
+        Auth-Type mschap {
+            mschap
+        }
+    }
+
+    preacct {
+        preprocess
+        acct_unique
+    }
+
+    accounting {
+        sql
+    }
+
+    session {
+        sql
+    }
+
+    post-auth {
+        sql
+        exec
+        Post-Auth-Type REJECT {
+            sql
+            attr_filter.access_reject
+        }
+    }
+}

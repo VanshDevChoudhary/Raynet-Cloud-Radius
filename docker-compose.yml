@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cloudradius-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: cloudradius
+      POSTGRES_PASSWORD: cloudradius
+      POSTGRES_DB: cloudradius
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudradius"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: cloudradius-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  freeradius:
+    image: freeradius/freeradius-server:latest
+    container_name: cloudradius-radius
+    restart: unless-stopped
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+      - "3799:3799/udp"
+    volumes:
+      - ./radius/radiusd.conf:/etc/freeradius/radiusd.conf:ro
+      - ./radius/clients.conf:/etc/freeradius/clients.conf:ro
+      - ./radius/sql.conf:/etc/freeradius/mods-enabled/sql:ro
+      - ./radius/dictionary.mikrotik:/etc/freeradius/dictionary.mikrotik:ro
+      - ./radius/default:/etc/freeradius/sites-enabled/default:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: cloudradius
+      POSTGRES_PASSWORD: cloudradius
+      POSTGRES_DB: cloudradius
+
+volumes:
+  postgres_data:
+  redis_data:
